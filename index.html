@@ -75,7 +75,7 @@
             display: grid;
             grid-template-columns: 320px 1fr;
             grid-template-rows: auto auto auto;
-            gap: 14px;
+            gap: 10px;
             align-items: stretch;
         }
 
@@ -83,27 +83,30 @@
            (like the results table) force the whole layout wider than the
            viewport on phones — this is what makes a page need pinch-zooming.
            Overriding it to 0 lets each card shrink to the available width. */
-        .converter-card, .mccmnc-card, .worldclock-card, .results-card { min-width: 0; }
+        .converter-card, .mccmnc-card, .worldclock-card, .results-column, .results-card { min-width: 0; }
 
         .converter-card { grid-column: 1; grid-row: 1; }
         .mccmnc-card { grid-column: 1; grid-row: 2; }
         .worldclock-card { grid-column: 1; grid-row: 3; }
 
-        /* Results card spans all three rows and stretches to the same total
-           height as the left-column stack, so its bottom edge lines up with
-           theirs instead of leaving empty space. */
-        .results-card {
+        /* Results column spans all three left-column rows and stacks its two
+           cards (DPC + MCC-MNC) vertically with a small gap. Because each
+           card's body collapses independently, if the DPC card is minimized
+           the MCC-MNC card naturally moves up right underneath it instead
+           of leaving an empty gap. */
+        .results-column {
             grid-column: 2;
             grid-row: 1 / span 3;
             display: flex;
             flex-direction: column;
+            gap: 14px;
             min-height: 0;
         }
+        .results-column .results-card { flex: 0 0 auto; }
 
         @media (max-width: 1000px) {
             .dashboard { grid-template-columns: 1fr; grid-template-rows: auto; }
-            .converter-card, .mccmnc-card, .worldclock-card, .results-card { grid-column: 1; grid-row: auto; }
-            .results-card { height: auto; }
+            .converter-card, .mccmnc-card, .worldclock-card, .results-column { grid-column: 1; grid-row: auto; }
         }
 
         @media (max-width: 480px) {
@@ -114,15 +117,15 @@
 
         .card {
             background-color: var(--card-bg);
-            padding: 18px;
+            padding: 14px 18px;
             border-radius: 8px;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
         }
 
         h1 {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             color: var(--primary-color);
-            margin: 0 0 14px 0;
+            margin: 0;
             text-align: center;
             font-weight: 600;
         }
@@ -132,7 +135,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 14px;
+            margin-bottom: 10px;
             cursor: pointer;
             user-select: none;
         }
@@ -202,8 +205,17 @@
         .converter-grid {
             display: flex;
             flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Decimal + Hex side by side on one row, instead of stacked, to
+           save vertical space in the left column. */
+        .dec-hex-row {
+            display: flex;
             gap: 14px;
         }
+        .dec-hex-row .group { flex: 1; }
+        .dec-hex-row .dec-wrapper { width: 100%; }
 
         .group { position: relative; }
 
@@ -638,19 +650,21 @@
             <div class="collapse-toggle-btn" id="converterToggleBtn" title="Collapse / expand">▼</div>
         </div>
         <div class="converter-grid collapsible-body">
-            <div class="group">
-                <label for="decInput">Decimal</label>
-                <div class="input-wrapper dec-wrapper">
-                    <input type="text" id="decInput" placeholder="5446" autocomplete="off" inputmode="numeric" enterkeyhint="search">
-                    <div class="tooltip">0..16383</div>
+            <div class="dec-hex-row">
+                <div class="group">
+                    <label for="decInput">Decimal</label>
+                    <div class="input-wrapper dec-wrapper">
+                        <input type="text" id="decInput" placeholder="5446" autocomplete="off" inputmode="numeric" enterkeyhint="search">
+                        <div class="tooltip">0..16383</div>
+                    </div>
                 </div>
-            </div>
 
-            <div class="group">
-                <label for="hexInput">Hex</label>
-                <div class="input-wrapper dec-wrapper">
-                    <input type="text" id="hexInput" placeholder="1546" autocomplete="off" inputmode="text" enterkeyhint="search" maxlength="4" style="text-transform:uppercase;">
-                    <div class="tooltip">0000..3FFF</div>
+                <div class="group">
+                    <label for="hexInput">Hex</label>
+                    <div class="input-wrapper dec-wrapper">
+                        <input type="text" id="hexInput" placeholder="1546" autocomplete="off" inputmode="text" enterkeyhint="search" maxlength="4" style="text-transform:uppercase;">
+                        <div class="tooltip">0000..3FFF</div>
+                    </div>
                 </div>
             </div>
 
@@ -675,7 +689,6 @@
             </div>
             <button type="button" id="searchBtn" class="search-btn">🔍 Search</button>
             <button type="button" id="clearBtn" class="clear-btn">✖ Clear</button>
-            <div class="hint">Press <strong>Enter</strong> in any field, or tap Search, to search the ISPC database.</div>
         </div>
     </div>
 
@@ -700,7 +713,6 @@
 
     <!-- WORLD CLOCK CARD (moved directly below the converter, same width) -->
     <div class="card worldclock-card" id="worldClockCard">
-        <h2 class="card-title" style="text-align:center;">Country Time Zone</h2>
 
         <div class="worldclock-placeholder" id="worldClockPlaceholder">
             After a successful search, the current time in the found country will be shown here.
@@ -729,50 +741,96 @@
         </div>
     </div>
 
-    <!-- RESULTS CARD -->
-    <div class="card results-card" id="resultsCard">
-        <div class="card-header-row">
-            <div class="card-title-block">
-                <h2 class="card-title">Search Results</h2>
-                <div class="data-source-note">Source: LIST OF ISPC ITU-T Q.708 file JULY 2024</div>
+    <!-- RESULTS COLUMN: DPC results card + MCC-MNC results card, stacked -->
+    <div class="results-column">
+
+        <!-- RESULTS CARD (DPC) -->
+        <div class="card results-card" id="resultsCard">
+            <div class="card-header-row">
+                <div class="card-title-block">
+                    <h2 class="card-title">Search Results</h2>
+                    <div class="data-source-note">Source: LIST OF ISPC ITU-T Q.708 file JULY 2024</div>
+                </div>
+                <div class="card-header-actions">
+                    <button type="button" id="backToTopBtn" class="back-to-top-btn" title="Back to the converter and map">⬆ Top</button>
+                    <div class="db-indicator" id="dbIndicator" title="Loading the database...">
+                        <span class="db-dot loading" id="dbDot"></span>
+                        <span id="dbStatusText">🗄️ database</span>
+                    </div>
+                    <div class="collapse-toggle-btn" id="resultsToggleBtn" title="Collapse / expand">▼</div>
+                </div>
             </div>
-            <div class="card-header-actions">
-                <button type="button" id="backToTopBtn" class="back-to-top-btn" title="Back to the converter and map">⬆ Top</button>
-                <div class="db-indicator" id="dbIndicator" title="Loading the database...">
-                    <span class="db-dot loading" id="dbDot"></span>
-                    <span id="dbStatusText">🗄️ database</span>
+
+            <div class="collapsible-body">
+                <div class="results-placeholder" id="resultsPlaceholder">
+                    <div class="results-placeholder-icon">🔍</div>
+                    <div class="results-placeholder-text">Enter a Decimal value on the left, then press <kbd class="key-badge">Enter</kbd> to search the ISPC database.</div>
+                </div>
+
+                <div class="results-body" id="resultsBody">
+                    <div class="search-message" id="searchMessage"></div>
+
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>DEC Code</th>
+                                    <th>ISPC Code</th>
+                                    <th>Point Name</th>
+                                    <th>Operator Name</th>
+                                    <th>Country</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultTableBody">
+                                <tr>
+                                    <td colspan="5" class="no-data">Loading database, please wait...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="results-placeholder" id="resultsPlaceholder">
-            <div class="results-placeholder-icon">🔍</div>
-            <div class="results-placeholder-text">Enter a Decimal value on the left, then press <kbd class="key-badge">Enter</kbd> to search the ISPC database.</div>
-        </div>
+        <!-- MCC-MNC RESULTS CARD (appears once a search is made) -->
+        <div class="card results-card mccmnc-results-card" id="mccMncResultsCard">
+            <div class="card-header-row">
+                <div class="card-title-block">
+                    <h2 class="card-title">MCC-MNC Results</h2>
+                    <div class="data-source-note">Source: uploaded MCC/MNC operator list</div>
+                </div>
+                <div class="card-header-actions">
+                    <div class="collapse-toggle-btn" id="mccMncResultsToggleBtn" title="Collapse / expand">▼</div>
+                </div>
+            </div>
 
-        <div class="results-body" id="resultsBody">
-            <div class="search-message" id="searchMessage"></div>
+            <div class="collapsible-body">
+                <div class="results-placeholder" id="mccMncResultsPlaceholder">
+                    <div class="results-placeholder-icon">🔍</div>
+                    <div class="results-placeholder-text">Start typing an MCC/MNC value in the box on the left to see matching operators here.</div>
+                </div>
 
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>DEC Code</th>
-                            <th>ISPC Code</th>
-                            <th>Point Name</th>
-                            <th>Operator Name</th>
-                            <th>Country</th>
-                        </tr>
-                    </thead>
-                    <tbody id="resultTableBody">
-                        <tr>
-                            <td colspan="5" class="no-data">Loading database, please wait...</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="results-body" id="mccMncResultsBody">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Country</th>
+                                    <th>Operator</th>
+                                    <th>TADIG Code</th>
+                                    <th>MCC</th>
+                                    <th>MNC</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mccMncResultTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
+
     </div>
+
 
 </div>
 
@@ -1014,28 +1072,45 @@
     setupCollapsible('converterCard', 'converterToggleBtn', 'converterHeader');
     setupCollapsible('mccMncCard', 'mccMncToggleBtn', 'mccMncHeader');
 
+    // The two results cards on the right only have a standalone toggle
+    // button (their header also holds the Top/database-status controls,
+    // so the whole header can't be one big click target like the left cards).
+    document.getElementById('resultsToggleBtn').addEventListener('click', () => {
+        document.getElementById('resultsCard').classList.toggle('collapsed');
+    });
+    document.getElementById('mccMncResultsToggleBtn').addEventListener('click', () => {
+        document.getElementById('mccMncResultsCard').classList.toggle('collapsed');
+    });
+
     // =====================================================================
     // MCC-MNC LIVE SEARCH
     // =====================================================================
     const mccMncInput = document.getElementById('mccMncInput');
     const mccMncLiveResults = document.getElementById('mccMncLiveResults');
     let currentMccMncSelectedRow = null;
+    let currentMccMncSelectedTadig = null;
 
     function clearMccMncLiveResults() {
         mccMncLiveResults.innerHTML = '';
         mccMncLiveResults.classList.remove('visible');
         currentMccMncSelectedRow = null;
+        currentMccMncSelectedTadig = null;
     }
 
     function renderMccMncResults(rows, prefix) {
+        // Every keystroke re-runs the query and fully rebuilds both the
+        // dropdown AND the results table below from that fresh result set —
+        // this is what makes changing e.g. "28403" to "28401" correctly
+        // switch the shown operator instead of leaving the old one in place.
         if (rows.length === 0) {
             mccMncLiveResults.innerHTML = `<div class="mccmnc-no-results">No operator found for "${escapeHtml(prefix)}"</div>`;
             mccMncLiveResults.classList.add('visible');
+            renderMccMncResultsTable([]);
             return;
         }
         const parts = rows.map(row => {
             const mccMnc = `${row.MCC}-${row.MNC}`;
-            return `<div class="mccmnc-result-row" data-country="${escapeHtml(row.Country)}">` +
+            return `<div class="mccmnc-result-row" data-tadig="${escapeHtml(row.TadigCode)}" data-country="${escapeHtml(row.Country)}">` +
                 `<div class="mm-line1"><span>${escapeHtml(row.Operator)}</span><span class="mm-mccmnc">${escapeHtml(mccMnc)}</span></div>` +
                 `<div class="mm-line2">${escapeHtml(row.Country)} · TADIG: ${escapeHtml(row.TadigCode)}</div>` +
                 `</div>`;
@@ -1043,27 +1118,77 @@
         mccMncLiveResults.innerHTML = parts.join('');
         mccMncLiveResults.classList.add('visible');
 
+        renderMccMncResultsTable(rows);
+
         // Auto-select when the typed prefix has narrowed things down to a
         // single matching operator, so the world clock/map/flag update
         // immediately without requiring an extra click.
         if (rows.length === 1) {
-            selectMccMncRow(mccMncLiveResults.firstElementChild, rows[0].Country);
+            selectMccMncRow(mccMncLiveResults.firstElementChild, rows[0].Country, rows[0].TadigCode);
+        } else {
+            // Multiple (or zero) matches: nothing is uniquely selected yet,
+            // so don't leave a stale highlighted row from a previous query.
+            currentMccMncSelectedRow = null;
+            currentMccMncSelectedTadig = null;
         }
     }
 
-    function selectMccMncRow(rowEl, country) {
+    // Rebuilds the "MCC-MNC Results" table on the right from the given rows,
+    // and reveals that card (fading in, same as the DPC results card does
+    // on first search) if it isn't visible yet.
+    function renderMccMncResultsTable(rows) {
+        const tableBody = document.getElementById('mccMncResultTableBody');
+        if (rows.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="5" class="no-data">No matching operators.</td></tr>`;
+        } else {
+            tableBody.innerHTML = rows.map(row =>
+                `<tr data-tadig="${escapeHtml(row.TadigCode)}">` +
+                `<td data-label="Country">${escapeHtml(row.Country)}</td>` +
+                `<td data-label="Operator">${escapeHtml(row.Operator)}</td>` +
+                `<td data-label="TADIG Code">${escapeHtml(row.TadigCode)}</td>` +
+                `<td data-label="MCC">${escapeHtml(row.MCC)}</td>` +
+                `<td data-label="MNC">${escapeHtml(row.MNC)}</td>` +
+                `</tr>`
+            ).join('');
+        }
+        revealMccMncResults();
+    }
+
+    function revealMccMncResults() {
+        const card = document.getElementById('mccMncResultsCard');
+        card.classList.remove('collapsed'); // auto re-expand after a Clear
+        if (card.classList.contains('revealed')) return;
+        card.classList.add('revealed');
+        const body = document.getElementById('mccMncResultsBody');
+        body.style.display = 'flex';
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => { body.classList.add('shown'); });
+        });
+    }
+
+    function selectMccMncRow(rowEl, country, tadigCode) {
         if (currentMccMncSelectedRow) currentMccMncSelectedRow.classList.remove('selected');
         if (rowEl) {
             rowEl.classList.add('selected');
             currentMccMncSelectedRow = rowEl;
         }
+        currentMccMncSelectedTadig = tadigCode || null;
+
+        // Mirror the highlight onto the matching row of the results table.
+        document.querySelectorAll('#mccMncResultTableBody tr.highlight-target')
+            .forEach(tr => tr.classList.remove('highlight-target'));
+        if (tadigCode) {
+            const tr = document.querySelector(`#mccMncResultTableBody tr[data-tadig="${CSS.escape(tadigCode)}"]`);
+            if (tr) tr.classList.add('highlight-target');
+        }
+
         updateWorldClockPanel(country || null);
     }
 
     mccMncLiveResults.addEventListener('click', (e) => {
         const rowEl = e.target.closest('.mccmnc-result-row');
         if (!rowEl) return;
-        selectMccMncRow(rowEl, rowEl.dataset.country);
+        selectMccMncRow(rowEl, rowEl.dataset.country, rowEl.dataset.tadig);
     });
 
     mccMncInput.addEventListener('input', () => {
@@ -1103,6 +1228,10 @@
         mccMncInput.value = '';
         clearMccMncLiveResults();
         updateWorldClockPanel(null);
+        // Minimize the MCC-MNC results table (collapsed, same as the manual
+        // arrow toggle) rather than deleting its content, so the layout
+        // doesn't jump and a new search can simply re-expand it.
+        document.getElementById('mccMncResultsCard').classList.add('collapsed');
         mccMncInput.focus();
     });
 
