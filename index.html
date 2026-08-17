@@ -65,9 +65,9 @@
         }
 
         /* ---------- DASHBOARD LAYOUT ----------
-           Left column: converter card (row 1) + mcc-mnc card (row 2) +
-           world clock card (row 3), same width.
-           Right column: results card, spanning all three rows. */
+           Row 1: converter card (left) + DPC results card (right).
+           Row 2: mcc-mnc search card (left) + mcc-mnc results card (right).
+           Row 3: world clock card (left only, right cell left empty). */
         .dashboard {
             width: 100%;
             max-width: 1500px;
@@ -83,30 +83,32 @@
            (like the results table) force the whole layout wider than the
            viewport on phones — this is what makes a page need pinch-zooming.
            Overriding it to 0 lets each card shrink to the available width. */
-        .converter-card, .mccmnc-card, .worldclock-card, .results-column, .results-card { min-width: 0; }
+        .converter-card, .mccmnc-card, .worldclock-card, .results-card { min-width: 0; }
 
+        /* Each left "search" card sits in the SAME grid row as its right
+           "results" partner (row 1: converter + DPC results, row 2:
+           mcc-mnc search + mcc-mnc results). Because grid rows stretch
+           every cell in that row to the height of the tallest one
+           (align-items: stretch below), the two cards always end up the
+           same height and their tops/bottoms always line up — no more
+           independent, mismatched heights. Collapsing one side in JS
+           collapses its partner too, so a collapsed row is fully in sync. */
         .converter-card { grid-column: 1; grid-row: 1; }
+        #resultsCard { grid-column: 2; grid-row: 1; }
         .mccmnc-card { grid-column: 1; grid-row: 2; }
+        #mccMncResultsCard { grid-column: 2; grid-row: 2; }
         .worldclock-card { grid-column: 1; grid-row: 3; }
 
-        /* Results column spans all three left-column rows and stacks its two
-           cards (DPC + MCC-MNC) vertically with a small gap. Because each
-           card's body collapses independently, if the DPC card is minimized
-           the MCC-MNC card naturally moves up right underneath it instead
-           of leaving an empty gap. */
-        .results-column {
-            grid-column: 2;
-            grid-row: 1 / span 3;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            min-height: 0;
-        }
-        .results-column .results-card { flex: 0 0 auto; }
+        /* Every card stretches to fill its grid row's height; making it a
+           flex column and letting the collapsible body grow means that
+           extra height (when its row partner is taller) is absorbed inside
+           the card instead of leaving the two boxes visually misaligned. */
+        .card { display: flex; flex-direction: column; }
+        .collapsible-body { flex: 1 1 auto; min-height: 0; }
 
         @media (max-width: 1000px) {
             .dashboard { grid-template-columns: 1fr; grid-template-rows: auto; }
-            .converter-card, .mccmnc-card, .worldclock-card, .results-column { grid-column: 1; grid-row: auto; }
+            .converter-card, .mccmnc-card, .worldclock-card, #resultsCard, #mccMncResultsCard { grid-column: 1; grid-row: auto; }
         }
 
         @media (max-width: 480px) {
@@ -741,10 +743,7 @@
         </div>
     </div>
 
-    <!-- RESULTS COLUMN: DPC results card + MCC-MNC results card, stacked -->
-    <div class="results-column">
-
-        <!-- RESULTS CARD (DPC) -->
+    <!-- RESULTS CARD (DPC) -->
         <div class="card results-card" id="resultsCard">
             <div class="card-header-row">
                 <div class="card-title-block">
@@ -757,7 +756,6 @@
                         <span class="db-dot loading" id="dbDot"></span>
                         <span id="dbStatusText">🗄️ database</span>
                     </div>
-                    <div class="collapse-toggle-btn" id="resultsToggleBtn" title="Collapse / expand">▼</div>
                 </div>
             </div>
 
@@ -792,15 +790,13 @@
             </div>
         </div>
 
-        <!-- MCC-MNC RESULTS CARD (appears once a search is made) -->
-        <div class="card results-card mccmnc-results-card" id="mccMncResultsCard">
+        <!-- MCC-MNC RESULTS CARD: starts collapsed, in sync with the
+             mcc-mnc search card on the left starting collapsed too. -->
+        <div class="card results-card mccmnc-results-card collapsed" id="mccMncResultsCard">
             <div class="card-header-row">
                 <div class="card-title-block">
                     <h2 class="card-title">MCC-MNC Results</h2>
                     <div class="data-source-note">Source: uploaded MCC/MNC operator list</div>
-                </div>
-                <div class="card-header-actions">
-                    <div class="collapse-toggle-btn" id="mccMncResultsToggleBtn" title="Collapse / expand">▼</div>
                 </div>
             </div>
 
@@ -828,9 +824,6 @@
                 </div>
             </div>
         </div>
-
-    </div>
-
 
 </div>
 
@@ -970,8 +963,21 @@
         runSearch();
     });
 
+    // Resets a results card back to the exact state it's in on first page
+    // load: placeholder text visible, results table/body hidden again.
+    // Used by both Clear buttons so "Clear" fully undoes a search instead
+    // of only wiping the input fields.
+    function resetResultsPanel(cardId, bodyId) {
+        const card = document.getElementById(cardId);
+        card.classList.remove('revealed');
+        const body = document.getElementById(bodyId);
+        body.classList.remove('shown');
+        body.style.display = ''; // back to CSS default (display: none)
+    }
+
     // Clear button: wipes all three converter rows and resets the results
-    // area to its pre-search state (no leftover highlighted row / message).
+    // area to its pre-search state (no leftover highlighted row / message,
+    // table hidden behind the "Search Results" placeholder again).
     document.getElementById('clearBtn').addEventListener('click', () => {
         clearAllFields();
         const messageEl = document.getElementById('searchMessage');
@@ -980,6 +986,8 @@
             currentHighlightedRow.classList.remove('highlight-target');
             currentHighlightedRow = null;
         }
+        resetResultsPanel('resultsCard', 'resultsBody');
+        resetTableHeight();
         updateWorldClockPanel(null);
         decInput.focus();
     });
@@ -1059,28 +1067,27 @@
     // =====================================================================
     // COLLAPSIBLE CARDS (converter + MCC-MNC search)
     // =====================================================================
-    function setupCollapsible(cardId, toggleBtnId, headerId) {
+    // Collapsing/expanding is driven ONLY from the left search cards. Each
+    // left card's arrow/header also mirrors the same collapsed state onto
+    // its right-side results partner (partnerCardId), so the two boxes in
+    // a row always minimize and restore together, staying level with each
+    // other. The right-side result cards have no arrow of their own.
+    function setupCollapsible(cardId, toggleBtnId, headerId, partnerCardId) {
         const card = document.getElementById(cardId);
         const toggleBtn = document.getElementById(toggleBtnId);
         const header = document.getElementById(headerId);
-        const toggle = () => card.classList.toggle('collapsed');
+        const partner = partnerCardId ? document.getElementById(partnerCardId) : null;
+        const toggle = () => {
+            const isCollapsed = card.classList.toggle('collapsed');
+            if (partner) partner.classList.toggle('collapsed', isCollapsed);
+        };
         header.addEventListener('click', toggle);
         // Prevent the click from firing twice (once on the button, once
         // bubbling up to the header, since the button is inside it).
         toggleBtn.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
     }
-    setupCollapsible('converterCard', 'converterToggleBtn', 'converterHeader');
-    setupCollapsible('mccMncCard', 'mccMncToggleBtn', 'mccMncHeader');
-
-    // The two results cards on the right only have a standalone toggle
-    // button (their header also holds the Top/database-status controls,
-    // so the whole header can't be one big click target like the left cards).
-    document.getElementById('resultsToggleBtn').addEventListener('click', () => {
-        document.getElementById('resultsCard').classList.toggle('collapsed');
-    });
-    document.getElementById('mccMncResultsToggleBtn').addEventListener('click', () => {
-        document.getElementById('mccMncResultsCard').classList.toggle('collapsed');
-    });
+    setupCollapsible('converterCard', 'converterToggleBtn', 'converterHeader', 'resultsCard');
+    setupCollapsible('mccMncCard', 'mccMncToggleBtn', 'mccMncHeader', 'mccMncResultsCard');
 
     // =====================================================================
     // MCC-MNC LIVE SEARCH
@@ -1157,6 +1164,7 @@
     function revealMccMncResults() {
         const card = document.getElementById('mccMncResultsCard');
         card.classList.remove('collapsed'); // auto re-expand after a Clear
+        document.getElementById('mccMncCard').classList.remove('collapsed'); // keep left/right in sync
         if (card.classList.contains('revealed')) return;
         card.classList.add('revealed');
         const body = document.getElementById('mccMncResultsBody');
@@ -1228,10 +1236,9 @@
         mccMncInput.value = '';
         clearMccMncLiveResults();
         updateWorldClockPanel(null);
-        // Minimize the MCC-MNC results table (collapsed, same as the manual
-        // arrow toggle) rather than deleting its content, so the layout
-        // doesn't jump and a new search can simply re-expand it.
-        document.getElementById('mccMncResultsCard').classList.add('collapsed');
+        // Reset back to the placeholder view (same as the main Clear
+        // button). Collapsing is left entirely to the card's own arrow.
+        resetResultsPanel('mccMncResultsCard', 'mccMncResultsBody');
         mccMncInput.focus();
     });
 
@@ -1542,6 +1549,11 @@
     // search reveals it with a short fade/slide-in effect.
     function revealResults() {
         const card = document.getElementById('resultsCard');
+        // Defensive re-sync: a search implies the converter card must be
+        // expanded (its fields are how the search was triggered), so make
+        // sure both sides of the row are expanded.
+        card.classList.remove('collapsed');
+        document.getElementById('converterCard').classList.remove('collapsed');
         if (card.classList.contains('revealed')) return;
         card.classList.add('revealed');
         const body = document.getElementById('resultsBody');
