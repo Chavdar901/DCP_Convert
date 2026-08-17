@@ -321,7 +321,7 @@
         /* ---------- COUNTRY FLAG (results table column) ---------- */
         th:last-child, td.flag-cell { text-align: center; }
         .country-flag-lg {
-            font-size: 1.4rem;
+            font-size: 1rem;
             line-height: 1;
             display: inline-block;
         }
@@ -457,11 +457,16 @@
             -webkit-overflow-scrolling: touch;
             flex: 1 1 auto;
             min-width: 0;
-            min-height: 300px;
-            max-height: 420px; /* fixed cap: a wide match (e.g. many MCC-MNC
-                                   rows) scrolls inside this box instead of
-                                   growing the card — keeps only two possible
-                                   card sizes (collapsed / expanded). */
+            /* No min-height: forcing a minimum here fought with the JS-set
+               max-height for the 5-row DPC match window, revealing extra
+               rows below it. flex:1 already lets it grow to fill the card
+               if the row's left-side partner needs more height. */
+            max-height: 300px; /* fixed cap, close to the card's normal
+                                   pre-search (placeholder) height: a wide
+                                   match (e.g. many MCC-MNC rows) scrolls
+                                   inside this box instead of growing the
+                                   card — keeps only two possible card sizes
+                                   (collapsed / expanded). */
             border: 1px solid var(--border-color);
             border-radius: 4px;
         }
