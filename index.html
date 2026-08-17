@@ -439,6 +439,16 @@
         }
         .results-card.revealed .results-placeholder { display: none; }
 
+        /* The MCC-MNC row is meant to stay compact — its row's "normal"
+           (nothing typed yet) height should already match the small,
+           3-row height a picked operator shows, not the taller DPC
+           placeholder above it. This also means Clear (which returns to
+           this same placeholder) never causes a visible height jump. */
+        #mccMncResultsPlaceholder {
+            min-height: 70px;
+            padding: 14px 20px;
+        }
+
         .results-body {
             display: none;
             flex-direction: column;
