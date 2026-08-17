@@ -318,6 +318,14 @@
             vertical-align: -1px;
         }
 
+        /* ---------- COUNTRY FLAG (results table column) ---------- */
+        th:last-child, td.flag-cell { text-align: center; }
+        .country-flag-lg {
+            font-size: 1.4rem;
+            line-height: 1;
+            display: inline-block;
+        }
+
         .search-btn {
             width: 100%;
             padding: 9px;
@@ -450,7 +458,10 @@
             flex: 1 1 auto;
             min-width: 0;
             min-height: 300px;
-            max-height: 80vh;
+            max-height: 420px; /* fixed cap: a wide match (e.g. many MCC-MNC
+                                   rows) scrolls inside this box instead of
+                                   growing the card — keeps only two possible
+                                   card sizes (collapsed / expanded). */
             border: 1px solid var(--border-color);
             border-radius: 4px;
         }
@@ -465,7 +476,10 @@
         .no-data { text-align: center; padding: 20px; color: #777; }
 
         /* ---------- WORLD CLOCK PANEL ---------- */
-        .worldclock-card { display: flex; flex-direction: column; gap: 10px; }
+        /* Layout (display:flex/flex-direction:column) is already inherited
+           from the generic .card rule; the header/body gap comes from the
+           shared .collapsible-header margin, same as the other cards. */
+        .worldclock-card .collapsible-body { display: flex; flex-direction: column; gap: 10px; }
 
         .worldclock-placeholder {
             text-align: center;
@@ -704,7 +718,7 @@
             <div class="group">
                 <label for="mccMncInput">MCC / MNC</label>
                 <div class="mccmnc-input-wrapper">
-                    <input type="text" id="mccMncInput" placeholder="28403" autocomplete="off" inputmode="numeric" maxlength="7">
+                    <input type="text" id="mccMncInput" placeholder="28401" autocomplete="off" inputmode="numeric" maxlength="7">
                 </div>
             </div>
             <div class="mccmnc-live-results" id="mccMncLiveResults"></div>
@@ -715,31 +729,37 @@
 
     <!-- WORLD CLOCK CARD (moved directly below the converter, same width) -->
     <div class="card worldclock-card" id="worldClockCard">
-
-        <div class="worldclock-placeholder" id="worldClockPlaceholder">
-            After a successful search, the current time in the found country will be shown here.
+        <div class="collapsible-header" id="worldClockHeader">
+            <h1>World Clock &amp; Map</h1>
+            <div class="collapse-toggle-btn" id="worldClockToggleBtn" title="Collapse / expand">▼</div>
         </div>
 
-        <div class="worldclock-content" id="worldClockContent">
-            <div class="country-clock-label" id="countryClockLabel">— Time now</div>
-            <div class="country-clock-time" id="countryClockTime">--:--:--</div>
-            <div class="utc-info" id="utcOffsetText">UTC —</div>
-            <div class="utc-info" id="utcDiffText">—</div>
-            <div class="utc-info" id="countryDialCode">—</div>
-
-            <div class="mini-clocks">
-                <div class="mini-clock-box">
-                    <div class="city">Sofia</div>
-                    <div class="time" id="sofiaTime">--:--:--</div>
-                </div>
-                <div class="mini-clock-box">
-                    <div class="city">Vienna</div>
-                    <div class="time" id="viennaTime">--:--:--</div>
-                </div>
+        <div class="collapsible-body">
+            <div class="worldclock-placeholder" id="worldClockPlaceholder">
+                After a successful search, the current time in the found country will be shown here.
             </div>
 
-            <div id="worldMap"></div>
-            <div class="utc-info" id="worldClockNote"></div>
+            <div class="worldclock-content" id="worldClockContent">
+                <div class="country-clock-label" id="countryClockLabel">— Time now</div>
+                <div class="country-clock-time" id="countryClockTime">--:--:--</div>
+                <div class="utc-info" id="utcOffsetText">UTC —</div>
+                <div class="utc-info" id="utcDiffText">—</div>
+                <div class="utc-info" id="countryDialCode">—</div>
+
+                <div class="mini-clocks">
+                    <div class="mini-clock-box">
+                        <div class="city">Sofia</div>
+                        <div class="time" id="sofiaTime">--:--:--</div>
+                    </div>
+                    <div class="mini-clock-box">
+                        <div class="city">Vienna</div>
+                        <div class="time" id="viennaTime">--:--:--</div>
+                    </div>
+                </div>
+
+                <div id="worldMap"></div>
+                <div class="utc-info" id="worldClockNote"></div>
+            </div>
         </div>
     </div>
 
@@ -777,11 +797,12 @@
                                     <th>Point Name</th>
                                     <th>Operator Name</th>
                                     <th>Country</th>
+                                    <th>Flag</th>
                                 </tr>
                             </thead>
                             <tbody id="resultTableBody">
                                 <tr>
-                                    <td colspan="5" class="no-data">Loading database, please wait...</td>
+                                    <td colspan="6" class="no-data">Loading database, please wait...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -811,11 +832,12 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Country</th>
-                                    <th>Operator</th>
-                                    <th>TADIG Code</th>
                                     <th>MCC</th>
                                     <th>MNC</th>
+                                    <th>TADIG Code</th>
+                                    <th>Operator Name</th>
+                                    <th>Country</th>
+                                    <th>Flag</th>
                                 </tr>
                             </thead>
                             <tbody id="mccMncResultTableBody"></tbody>
@@ -1006,6 +1028,16 @@
             .replace(/>/g, '&gt;');
     }
 
+    // Renders the right-most "Flag" cell for a results-table row. Looks the
+    // country name up in the same countryData map used for the world clock,
+    // so it stays consistent with whatever timezone/flag data already
+    // exists — countries not found there simply render an empty cell.
+    function flagCellHtml(countryName) {
+        const info = countryName ? countryData[countryName] : null;
+        const emoji = info ? isoToFlagEmoji(info.iso2) : '';
+        return `<td data-label="Flag" class="flag-cell">${emoji ? `<span class="country-flag-lg">${emoji}</span>` : ''}</td>`;
+    }
+
     // Builds the full results table once, from every row in ispc_codes.
     // The table then stays fully loaded and scrollable; searches only
     // move the highlight and scroll to the matching row.
@@ -1023,6 +1055,7 @@
                     `<td data-label="Point Name">${escapeHtml(row.SignallingPointName)}</td>` +
                     `<td data-label="Operator Name">${escapeHtml(row.OperatorName)}</td>` +
                     `<td data-label="Country">${escapeHtml(row.Country)}</td>` +
+                    flagCellHtml(row.Country) +
                     `</tr>`
                 );
             }
@@ -1031,7 +1064,7 @@
             tableBuilt = true;
         } catch (err) {
             console.error(err);
-            tableBody.innerHTML = `<tr><td colspan="5" class="no-data">Error while loading the table rows.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="6" class="no-data">Error while loading the table rows.</td></tr>`;
         }
     }
 
@@ -1058,7 +1091,7 @@
             text.textContent = '🗄️ database';
             indicator.title = 'Error loading the database';
             document.getElementById('resultTableBody').innerHTML =
-                `<tr><td colspan="5" class="no-data">Could not load the database.</td></tr>`;
+                `<tr><td colspan="6" class="no-data">Could not load the database.</td></tr>`;
         }
     }
 
@@ -1072,7 +1105,7 @@
     // its right-side results partner (partnerCardId), so the two boxes in
     // a row always minimize and restore together, staying level with each
     // other. The right-side result cards have no arrow of their own.
-    function setupCollapsible(cardId, toggleBtnId, headerId, partnerCardId) {
+    function setupCollapsible(cardId, toggleBtnId, headerId, partnerCardId, onExpand) {
         const card = document.getElementById(cardId);
         const toggleBtn = document.getElementById(toggleBtnId);
         const header = document.getElementById(headerId);
@@ -1080,6 +1113,7 @@
         const toggle = () => {
             const isCollapsed = card.classList.toggle('collapsed');
             if (partner) partner.classList.toggle('collapsed', isCollapsed);
+            if (!isCollapsed && typeof onExpand === 'function') onExpand();
         };
         header.addEventListener('click', toggle);
         // Prevent the click from firing twice (once on the button, once
@@ -1088,6 +1122,28 @@
     }
     setupCollapsible('converterCard', 'converterToggleBtn', 'converterHeader', 'resultsCard');
     setupCollapsible('mccMncCard', 'mccMncToggleBtn', 'mccMncHeader', 'mccMncResultsCard');
+    setupCollapsible('worldClockCard', 'worldClockToggleBtn', 'worldClockHeader', null, () => {
+        // The map container has zero size while collapsed, so if a search
+        // already happened before the user expanded this card, the map
+        // needs to be created/resized now that it's actually visible.
+        const card = document.getElementById('worldClockCard');
+        if (!card.classList.contains('has-data')) return;
+        if (!leafletMap) {
+            initWorldMap();
+            setTimeout(() => highlightCountryOnMap(currentCountryInfo), 0);
+        } else {
+            leafletMap.invalidateSize();
+            highlightCountryOnMap(currentCountryInfo);
+        }
+    });
+
+    // World clock/map card: on a phone the map otherwise pushes the results
+    // table far down the page, so it starts collapsed there; on desktop
+    // there's plenty of room, so it starts expanded. This only sets the
+    // state once at load — it doesn't react to later window resizing.
+    if (window.matchMedia('(max-width: 1000px)').matches) {
+        document.getElementById('worldClockCard').classList.add('collapsed');
+    }
 
     // =====================================================================
     // MCC-MNC LIVE SEARCH
@@ -1117,7 +1173,8 @@
         }
         const parts = rows.map(row => {
             const mccMnc = `${row.MCC}-${row.MNC}`;
-            return `<div class="mccmnc-result-row" data-tadig="${escapeHtml(row.TadigCode)}" data-country="${escapeHtml(row.Country)}">` +
+            const rawValue = `${row.MCC}${row.MNC}`;
+            return `<div class="mccmnc-result-row" data-tadig="${escapeHtml(row.TadigCode)}" data-country="${escapeHtml(row.Country)}" data-value="${escapeHtml(rawValue)}">` +
                 `<div class="mm-line1"><span>${escapeHtml(row.Operator)}</span><span class="mm-mccmnc">${escapeHtml(mccMnc)}</span></div>` +
                 `<div class="mm-line2">${escapeHtml(row.Country)} · TADIG: ${escapeHtml(row.TadigCode)}</div>` +
                 `</div>`;
@@ -1146,15 +1203,16 @@
     function renderMccMncResultsTable(rows) {
         const tableBody = document.getElementById('mccMncResultTableBody');
         if (rows.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="5" class="no-data">No matching operators.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="6" class="no-data">No matching operators.</td></tr>`;
         } else {
             tableBody.innerHTML = rows.map(row =>
                 `<tr data-tadig="${escapeHtml(row.TadigCode)}">` +
-                `<td data-label="Country">${escapeHtml(row.Country)}</td>` +
-                `<td data-label="Operator">${escapeHtml(row.Operator)}</td>` +
-                `<td data-label="TADIG Code">${escapeHtml(row.TadigCode)}</td>` +
                 `<td data-label="MCC">${escapeHtml(row.MCC)}</td>` +
                 `<td data-label="MNC">${escapeHtml(row.MNC)}</td>` +
+                `<td data-label="TADIG Code">${escapeHtml(row.TadigCode)}</td>` +
+                `<td data-label="Operator Name">${escapeHtml(row.Operator)}</td>` +
+                `<td data-label="Country">${escapeHtml(row.Country)}</td>` +
+                flagCellHtml(row.Country) +
                 `</tr>`
             ).join('');
         }
@@ -1197,6 +1255,11 @@
         const rowEl = e.target.closest('.mccmnc-result-row');
         if (!rowEl) return;
         selectMccMncRow(rowEl, rowEl.dataset.country, rowEl.dataset.tadig);
+        if (rowEl.dataset.value) mccMncInput.value = rowEl.dataset.value;
+        // Close the dropdown once a specific operator has been picked —
+        // the chosen code stays in the field and the match is already
+        // highlighted in the results table on the right.
+        mccMncLiveResults.classList.remove('visible');
     });
 
     mccMncInput.addEventListener('input', () => {
@@ -1247,6 +1310,7 @@
     // =====================================================================
     let currentCountryTz = null;
     let currentCountryLabel = null;
+    let currentCountryInfo = null;
 
     function formatTime(tz) {
         try {
@@ -1503,6 +1567,7 @@
         if (info && info.tz) {
             currentCountryTz = info.tz;
             currentCountryLabel = info.capital ? `${countryName}, ${info.capital}` : countryName;
+            currentCountryInfo = info;
             card.classList.add('has-data'); // makes #worldMap visible
 
             const offsetMin = getUtcOffsetMinutes(info.tz);
@@ -1514,19 +1579,22 @@
                 ? `${flagEmoji ? `<span class="country-flag">${flagEmoji}</span>` : ''}Country code: <strong>${info.code}</strong>`
                 : '';
 
-            if (!leafletMap) {
-                // First time the panel is visible: create the map now that
-                // its container has real dimensions.
-                initWorldMap();
-                setTimeout(() => highlightCountryOnMap(info), 0);
-            } else {
-                leafletMap.invalidateSize();
-                highlightCountryOnMap(info);
+            if (!card.classList.contains('collapsed')) {
+                if (!leafletMap) {
+                    // First time the panel is visible: create the map now that
+                    // its container has real dimensions.
+                    initWorldMap();
+                    setTimeout(() => highlightCountryOnMap(info), 0);
+                } else {
+                    leafletMap.invalidateSize();
+                    highlightCountryOnMap(info);
+                }
             }
             tick();
         } else {
             currentCountryTz = null;
             currentCountryLabel = null;
+            currentCountryInfo = null;
             card.classList.remove('has-data');
             highlightCountryOnMap(null);
             document.getElementById('countryDialCode').textContent = '—';
@@ -1627,9 +1695,9 @@
     }
 
     // Limits the visible height of the results table to the matched row
-    // plus up to 4 rows of context above and below it (instead of showing
-    // the entire multi-thousand-row table), and scrolls that window into
-    // view right under the sticky header.
+    // plus up to 2 rows of context above and below it (5 rows total,
+    // instead of showing the entire multi-thousand-row table), and scrolls
+    // that window into view right under the sticky header.
     function fitTableToResult(row) {
         const container = document.querySelector('.table-container');
         const thead = container ? container.querySelector('thead') : null;
@@ -1640,8 +1708,8 @@
         const idx = rows.indexOf(row);
         if (idx === -1) return;
 
-        const startRow = rows[Math.max(0, idx - 4)];
-        const endRow = rows[Math.min(rows.length - 1, idx + 4)];
+        const startRow = rows[Math.max(0, idx - 2)];
+        const endRow = rows[Math.min(rows.length - 1, idx + 2)];
 
         // Reset scroll first so the measurements below aren't skewed by
         // the sticky header's current translated position.
