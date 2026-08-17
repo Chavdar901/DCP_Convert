@@ -1221,6 +1221,10 @@
                 `</tr>`
             ).join('');
         }
+        // Every rebuild starts at full (capped) height; a specific-row
+        // selection right after this (see selectMccMncRow) shrinks it
+        // further to a 3-row window.
+        resetMccMncTableHeight();
         revealMccMncResults();
     }
 
@@ -1245,13 +1249,16 @@
         }
         currentMccMncSelectedTadig = tadigCode || null;
 
-        // Mirror the highlight onto the matching row of the results table.
+        // Mirror the highlight onto the matching row of the results table,
+        // and shrink the table down to a small window around that row
+        // instead of showing the whole capped-height result set.
         document.querySelectorAll('#mccMncResultTableBody tr.highlight-target')
             .forEach(tr => tr.classList.remove('highlight-target'));
         if (tadigCode) {
             const tr = document.querySelector(`#mccMncResultTableBody tr[data-tadig="${CSS.escape(tadigCode)}"]`);
             if (tr) tr.classList.add('highlight-target');
         }
+        fitMccMncTableToResult(tadigCode);
 
         updateWorldClockPanel(country || null);
     }
@@ -1699,12 +1706,11 @@
         }
     }
 
-    // Limits the visible height of the results table to the matched row
-    // plus up to 2 rows of context above and below it (5 rows total,
-    // instead of showing the entire multi-thousand-row table), and scrolls
-    // that window into view right under the sticky header.
-    function fitTableToResult(row) {
-        const container = document.querySelector('.table-container');
+    // Shrinks `container`'s visible height to just the matched `row` plus up
+    // to `radius` rows of context above and below it (instead of showing
+    // the whole result set), and scrolls that window into view right under
+    // the sticky header. Shared by both the DPC and MCC-MNC results tables.
+    function fitTableWindow(container, row, radius) {
         const thead = container ? container.querySelector('thead') : null;
         if (!container || !thead || !row) return;
 
@@ -1713,8 +1719,8 @@
         const idx = rows.indexOf(row);
         if (idx === -1) return;
 
-        const startRow = rows[Math.max(0, idx - 2)];
-        const endRow = rows[Math.min(rows.length - 1, idx + 2)];
+        const startRow = rows[Math.max(0, idx - radius)];
+        const endRow = rows[Math.min(rows.length - 1, idx + radius)];
 
         // Reset scroll first so the measurements below aren't skewed by
         // the sticky header's current translated position.
@@ -1730,10 +1736,40 @@
         container.scrollTop = Math.max(0, Math.ceil(startTop - headHeight));
     }
 
+    // DPC results table: matched row plus up to 2 rows of context above and
+    // below it (5 rows total).
+    function fitTableToResult(row) {
+        fitTableWindow(document.querySelector('.table-container'), row, 2);
+    }
+
     // Restores the table to its normal (CSS-defined) max-height, used when
     // a search is cleared or comes back with no match.
     function resetTableHeight() {
         const container = document.querySelector('.table-container');
+        if (container) container.style.maxHeight = '';
+    }
+
+    // MCC-MNC results table: once a specific operator is picked (either by
+    // typing a prefix that narrows to a single match, or by clicking a
+    // dropdown row), shrink the table to that row plus 1 row of context
+    // above and below it (3 rows total) instead of the full capped height.
+    function fitMccMncTableToResult(tadigCode) {
+        const container = document.querySelector('#mccMncResultsBody .table-container');
+        const row = tadigCode
+            ? document.querySelector(`#mccMncResultTableBody tr[data-tadig="${CSS.escape(tadigCode)}"]`)
+            : null;
+        if (container && row) {
+            fitTableWindow(container, row, 1);
+        } else if (container) {
+            container.style.maxHeight = '';
+        }
+    }
+
+    // Restores the MCC-MNC results table to its normal (CSS-defined)
+    // max-height — used whenever the result set changes and isn't narrowed
+    // to one specific row yet (e.g. several operators still match).
+    function resetMccMncTableHeight() {
+        const container = document.querySelector('#mccMncResultsBody .table-container');
         if (container) container.style.maxHeight = '';
     }
 
